@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { UploadScreen } from '@/components/UploadScreen';
+
 import { ResultScreen } from '@/components/ResultScreen';
 import { recognizeText } from '@/services/ocr';
 import { Progress } from '@/components/ui/progress';
