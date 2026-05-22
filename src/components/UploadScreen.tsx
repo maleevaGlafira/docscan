@@ -1,9 +1,9 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { UploadCloud, File, FileText, FileImage, X, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { getPdfPreview } from '../services/ocr';
+import { getPdfPreview } from '@/services/ocr';
 
 interface UploadScreenProps {
   files: globalThis.File[];

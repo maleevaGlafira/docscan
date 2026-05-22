@@ -4,11 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { UploadScreen } from './components/UploadScreen';
-import { ResultScreen } from './components/ResultScreen';
-import { recognizeText } from './services/ocr';
-import { Progress } from './components/ui/progress';
-import { Card, CardContent } from './components/ui/card';
+import { UploadScreen } from '@/components/UploadScreen';
+import { ResultScreen } from '@/components/ResultScreen';
+import { recognizeText } from '@/services/ocr';
+import { Progress } from '@/components/ui/progress';
+import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, Scan } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 

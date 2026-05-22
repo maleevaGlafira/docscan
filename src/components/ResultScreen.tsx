@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { Copy, Download, ArrowLeft, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { postProcessText } from '../utils/postProcess';
+import { postProcessText } from '@/utils/postProcess';
 
 interface ResultScreenProps {
   initialText: string;
