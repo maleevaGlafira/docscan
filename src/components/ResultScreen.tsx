@@ -33,32 +33,35 @@ export function ResultScreen({ initialText, onBack }: ResultScreenProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col w-full h-[calc(100vh-140px)] min-h-[400px]">
-      <div className="flex-1 flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden w-full h-full">
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+    <div className="flex-1 flex flex-col w-full h-[calc(100vh-140px)] min-h-[420px]">
+      <div className="flex-1 flex flex-col bg-[#130B2B] rounded-2xl border border-[#7B52FF]/20 shadow-2xl shadow-black/30 overflow-hidden w-full h-full relative">
+        <div className="px-6 py-4 bg-[#1A1237]/60 border-b border-[#7B52FF]/15 flex items-center justify-between shrink-0 backdrop-blur-md">
           <div className="flex items-center gap-3">
             <button 
               onClick={onBack}
-              className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#130B2B] border border-[#7B52FF]/25 hover:border-[#7B52FF]/50 rounded-xl text-xs font-bold text-white hover:bg-[#1A1231] transition-all duration-200 cursor-pointer shadow-sm group"
             >
-              <ArrowLeft className="h-3 w-3" /> Back
+              <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" /> Back
             </button>
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-600">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              Processing Complete
+            <div className="hidden sm:flex items-center gap-2 px-3.5 py-2 bg-[#7B52FF]/10 border border-[#7B52FF]/20 rounded-xl text-xs font-bold text-[#A689FF] select-none">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Analysis Complete
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button 
               onClick={handleCopy}
-              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent" 
+              className="p-2.5 text-[#B5AED7]/70 hover:text-white hover:bg-[#7B52FF]/15 rounded-xl transition-all duration-200 border border-[#7B52FF]/15 cursor-pointer" 
               title="Copy to clipboard"
             >
-              <Copy className="h-5 w-5" />
+              <Copy className="h-4.5 w-4.5" />
             </button>
             <button 
               onClick={handleDownload}
-              className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-slate-900 transition-colors"
+              className="px-4 py-2 bg-[#7B52FF] text-white text-xs font-bold rounded-xl flex items-center gap-2 hover:bg-[#6836FF] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer shadow-lg shadow-[#7B52FF]/25 border-none"
             >
               <Download className="h-4 w-4" /> 
               <span className="hidden sm:inline">Download .txt</span>
@@ -66,13 +69,13 @@ export function ResultScreen({ initialText, onBack }: ResultScreenProps) {
           </div>
         </div>
         
-        <div className="flex-1 p-4 sm:p-8 bg-slate-50/30 overflow-hidden relative group">
+        <div className="flex-1 p-4 sm:p-6 bg-transparent overflow-hidden relative group">
           <textarea
-            className="w-full h-full bg-white border border-slate-100 rounded shadow-inner p-6 sm:p-8 text-slate-700 whitespace-pre-wrap overflow-y-auto resize-none outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
+            className="w-full h-full bg-[#0A051A]/60 border border-[#7B52FF]/10 rounded-xl p-6 sm:p-8 text-white whitespace-pre-wrap overflow-y-auto resize-none outline-none focus:border-[#7B52FF]/40 focus:ring-1 focus:ring-[#7B52FF]/20 transition-all font-sans leading-relaxed text-[15px] shadow-inner"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="No text recognized..."
-            style={{ paddingLeft: '3rem', fontSize: '15px', lineHeight: '21.75px', fontFamily: 'Verdana' }}
+            style={{ paddingLeft: '3rem', fontFamily: 'Plus Jakarta Sans', letterSpacing: '0.01em' }}
           />
         </div>
       </div>

@@ -110,32 +110,32 @@ export function UploadScreen({ files, setFiles, onRecognize }: UploadScreenProps
   };
 
   const getFileIconInfo = (type: string) => {
-    if (type === 'application/pdf') return { bg: 'bg-blue-50', text: 'text-blue-600', label: 'PDF' };
-    if (type.startsWith('image/jpeg')) return { bg: 'bg-green-50', text: 'text-green-600', label: 'JPG' };
-    if (type.startsWith('image/png')) return { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'PNG' };
-    if (type.startsWith('image/bmp')) return { bg: 'bg-purple-50', text: 'text-purple-600', label: 'BMP' };
-    return { bg: 'bg-slate-50', text: 'text-slate-600', label: 'FILE' };
+    if (type === 'application/pdf') return { bg: 'bg-rose-500/10 border border-rose-500/30', text: 'text-rose-400', label: 'PDF' };
+    if (type.startsWith('image/jpeg')) return { bg: 'bg-emerald-500/10 border border-emerald-500/30', text: 'text-emerald-400', label: 'JPG' };
+    if (type.startsWith('image/png')) return { bg: 'bg-amber-500/10 border border-amber-500/30', text: 'text-amber-400', label: 'PNG' };
+    if (type.startsWith('image/bmp')) return { bg: 'bg-purple-500/10 border border-purple-500/30', text: 'text-purple-400', label: 'BMP' };
+    return { bg: 'bg-zinc-500/10 border border-zinc-500/30', text: 'text-zinc-400', label: 'FILE' };
   };
 
   return (
     <div className="w-full flex-1 flex flex-col md:flex-row gap-6 p-2">
       <div className="w-full md:w-[320px] flex flex-col gap-6 shrink-0">
         <div
-          className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-8 flex flex-col items-center justify-center gap-3 text-center hover:border-indigo-400 transition-colors bg-indigo-50/10 cursor-pointer"
+          className="bg-[#130B2B] rounded-2xl border-2 border-dashed border-[#7B52FF]/30 p-8 flex flex-col items-center justify-center gap-4 text-center hover:border-[#7B52FF]/75 hover:bg-[#1A1231] transition-all duration-300 cursor-pointer shadow-lg shadow-black/30 shrink-0 select-none group"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
         >
-          <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
-            <UploadCloud className="h-6 w-6" />
+          <div className="w-14 h-14 bg-[#7B52FF]/10 text-[#7B52FF] rounded-xl flex items-center justify-center border border-[#7B52FF]/20 group-hover:scale-105 duration-300 transition-transform shadow-md shadow-[#7B52FF]/5">
+            <UploadCloud className="h-7 w-7" />
           </div>
           <div>
-            <p className="font-semibold text-slate-800">Drop files here</p>
-            <p className="text-xs text-slate-500 mt-1">PDF, JPEG, PNG, BMP (Max {MAX_FILES})</p>
+            <p className="font-heading font-semibold text-white tracking-wide text-sm">Drop files here</p>
+            <p className="text-xs text-[#B5AED7]/70 mt-1">PDF, JPEG, PNG, BMP (Max {MAX_FILES})</p>
           </div>
           <Button 
             variant="secondary" 
-            className="mt-2 text-sm font-medium rounded-lg shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white"
+            className="mt-2 text-xs font-bold rounded-xl bg-[#7B52FF] hover:bg-[#6836FF] text-white shadow-lg shadow-[#7B52FF]/20 px-5 py-2.5 transition-all cursor-pointer border-none"
             onClick={(e) => {
               e.stopPropagation();
               fileInputRef.current?.click();
@@ -154,8 +154,9 @@ export function UploadScreen({ files, setFiles, onRecognize }: UploadScreenProps
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0 bg-transparent rounded-xl border-0">
-        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">
+      <div className="flex-1 flex flex-col min-h-0 bg-transparent rounded-2xl border-0">
+        <h3 className="text-xs font-bold text-[#A689FF] uppercase tracking-widest mb-4 flex items-center gap-2 select-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#7B52FF] animate-pulse"></span>
           Processing Queue ({currentCount}/{MAX_FILES})
         </h3>
         
@@ -181,14 +182,14 @@ export function UploadScreen({ files, setFiles, onRecognize }: UploadScreenProps
                               style={provided.draggableProps.style}
                             >
                               <div 
-                                className={`p-3 bg-white border rounded-lg flex items-center gap-3 cursor-pointer ${
+                                className={`p-4 bg-[#130B2B] border rounded-xl flex items-center gap-4 cursor-pointer transition-all duration-300 ${
                                   snapshot.isDragging 
-                                  ? 'border-indigo-200 shadow-md ring-1 ring-indigo-500 ring-opacity-20' 
-                                  : 'border-slate-200 shadow-sm hover:border-indigo-300'
+                                  ? 'border-[#7B52FF]/50 shadow-2xl bg-[#1C123D] ring-2 ring-[#7B52FF]/20' 
+                                  : 'border-[#7B52FF]/15 hover:border-[#7B52FF]/40 hover:bg-[#1A1231]'
                                 }`}
                                 onClick={() => previewUrl && setSelectedPreview(previewUrl)}
                               >
-                                <div className={`w-10 h-10 ${iconInfo.bg} ${iconInfo.text} flex items-center justify-center rounded font-bold text-xs uppercase overflow-hidden shrink-0`}>
+                                <div className={`w-11 h-11 ${iconInfo.bg} ${iconInfo.text} flex items-center justify-center rounded-lg font-mono font-bold text-xs uppercase overflow-hidden shrink-0`}>
                                   {previewUrl ? (
                                     <img src={previewUrl} alt={file.name} className="w-full h-full object-cover" />
                                   ) : (
@@ -196,16 +197,16 @@ export function UploadScreen({ files, setFiles, onRecognize }: UploadScreenProps
                                   )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-slate-800 truncate">
+                                  <p className="text-sm font-semibold text-white truncate">
                                     {file.name}
                                   </p>
-                                  <p className="text-[10px] text-slate-400">
+                                  <p className="text-[10px] text-[#B5AED7]/60 font-mono mt-0.5">
                                     {(file.size / 1024 / 1024).toFixed(2)} MB
                                   </p>
                                 </div>
                                 <button
                                   type="button"
-                                  className="text-slate-300 hover:text-red-500 transition-colors p-2 -mr-2"
+                                  className="text-[#B5AED7]/40 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg p-2 transition-colors duration-200"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     removeFile(index);
@@ -226,15 +227,19 @@ export function UploadScreen({ files, setFiles, onRecognize }: UploadScreenProps
             </DragDropContext>
 
             <Button 
-              className="w-full py-4 mt-auto h-auto bg-indigo-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all" 
+              className="w-full py-4 mt-auto h-auto bg-gradient-to-r from-[#7B52FF] to-[#926CFF] hover:from-[#6A3DFF] hover:to-[#8356FF] text-white rounded-2xl font-heading font-black text-sm tracking-widest uppercase shadow-xl shadow-[#7B52FF]/15 flex items-center justify-center gap-2 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] cursor-pointer" 
               onClick={onRecognize}
             >
-              Recognize Text <ArrowRight className="h-5 w-5" />
+              Start Text Recognition <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center border-2 border-dashed border-slate-200 rounded-xl bg-white/50 text-slate-400 italic text-sm">
-            No files in queue.
+          <div className="flex-1 min-h-[160px] flex flex-col items-center justify-center border border-[rgba(127,102,255,0.12)] rounded-[20px] bg-white/50 backdrop-blur-[10px] bg-clip-border shadow-[0_0_15px_5px_rgba(127,102,255,0.1)] text-[#B5AED7]/60 text-sm py-12 px-6">
+            <div className="w-10 h-10 border-4 border-[#7B52FF]/15 bg-[#130b2b] text-[#7B52FF] rounded-xl flex items-center justify-center mb-3">
+              <File className="h-5 w-5 animate-pulse" />
+            </div>
+            <p className="font-bold font-sans text-[#130b2b]">Queue is empty</p>
+            <p className="text-xs text-[#130b2b] mt-1 text-center max-w-xs">Files you upload will appear here ready to process</p>
           </div>
         )}
       </div>
