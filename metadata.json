@@ -1,6 +1,6 @@
 {
-  "name": "OCR Pro",
-  "description": "A Single Page Application for document text recognition using OCR with support for images and PDFs.",
+  "name": "DocuScan AI",
+  "description": "A dark-themed professional document scan and OCR analysis engine with an agentacademy.ai inspired UI.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
