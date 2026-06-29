@@ -6,6 +6,47 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
+// Helper function to call Gemini API with robust retries and model fallbacks
+async function generateContentWithRetry(ai: GoogleGenAI, params: any, maxRetries = 3) {
+  const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.5-pro", "gemini-1.5-pro", "gemini-3.5-flash"];
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[OCR] Attempting with model: ${model} (attempt ${attempt}/${maxRetries})...`);
+        const response = await ai.models.generateContent({
+          ...params,
+          model: model,
+        });
+        if (response && response.text !== undefined) {
+          console.log(`[OCR] Success with model: ${model} on attempt: ${attempt}`);
+          return response;
+        }
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.message || String(err);
+        console.error(`[OCR] Error with model ${model} (attempt ${attempt}):`, errMsg);
+
+        // If it's an API key error, config issue, or invalid base64 (400), don't retry since it's client error
+        const errStr = errMsg.toLowerCase();
+        if (errStr.includes("400") || errStr.includes("invalid") || errStr.includes("api_key") || errStr.includes("not configured")) {
+          break;
+        }
+
+        // Wait before retrying with exponential backoff (e.g. 1.5s, 3s)
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 750;
+          console.log(`[OCR] Waiting ${delay}ms before next attempt...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to recognize text with all available models and retries");
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -58,11 +99,10 @@ async function startServer() {
       });
 
       const promptPart = {
-        text: "Extract all text from the provided images. Correct any grammar or spelling mistakes. Support English, Russian, and Ukrainian fluently. Return ONLY the extracted raw text, without any additional conversational filler, formatting wrappers, or markdown code blocks like ```.",
+        text: "Extract all text from the provided images, correcting any grammar or spelling mistakes. Support English, Russian, and Ukrainian fluently. Convert and structure the output into clean, beautifully organized semantic HTML using tags like <h1>, <h2>, <p>, <strong>, <em>, <ul>, <ol>, <li>, and styled <table> elements (if tables are present in the source). Ensure proper nested tags and valid structure. Return ONLY the raw HTML body content without any markdown code blocks (such as ```html or ```), headers like <!DOCTYPE html>, <html>, or <body>, and no conversational prefaces or explanations.",
       };
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await generateContentWithRetry(ai, {
         contents: { parts: [...parts, promptPart] },
         config: {
           temperature: 0.2, // Low temperature for more deterministic OCR results
@@ -70,9 +110,13 @@ async function startServer() {
       });
 
       res.json({ text: response.text });
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-      res.status(500).json({ error: "Failed to recognize text using Gemini API." });
+    } catch (error: any) {
+      console.error("Gemini API Error in endpoint:", error);
+      const errMsg = error?.message || String(error);
+      res.status(500).json({ 
+        error: "Failed to recognize text using Gemini API.",
+        details: errMsg
+      });
     }
   });
 

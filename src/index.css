@@ -129,3 +129,111 @@
     @apply font-sans antialiased bg-background;
     }
 }
+
+/* Custom styles for rendered OCR HTML view */
+.html-rendered-preview h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(123, 82, 255, 0.2);
+  padding-bottom: 0.25rem;
+}
+.html-rendered-preview h1:first-child {
+  margin-top: 0;
+}
+.html-rendered-preview h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #A689FF;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.html-rendered-preview h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.html-rendered-preview p {
+  margin-bottom: 1rem;
+  line-height: 1.625;
+  color: rgba(255, 255, 255, 0.9);
+}
+.html-rendered-preview ul {
+  list-style-type: disc;
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+.html-rendered-preview ol {
+  list-style-type: decimal;
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+.html-rendered-preview li {
+  margin-bottom: 0.35rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+.html-rendered-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+  background-color: rgba(10, 5, 26, 0.4);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(123, 82, 255, 0.15);
+}
+.html-rendered-preview th {
+  background-color: rgba(123, 82, 255, 0.25);
+  color: #A689FF;
+  font-weight: 700;
+  text-align: left;
+  padding: 0.75rem;
+  border: 1px solid rgba(123, 82, 255, 0.15);
+}
+.html-rendered-preview td {
+  padding: 0.75rem;
+  border: 1px solid rgba(123, 82, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+.html-rendered-preview tr:nth-child(even) {
+  background-color: rgba(123, 82, 255, 0.05);
+}
+.html-rendered-preview tr:hover {
+  background-color: rgba(123, 82, 255, 0.1);
+}
+.html-rendered-preview strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+.html-rendered-preview em {
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Custom Scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(10, 5, 26, 0.4);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(123, 82, 255, 0.3);
+  border-radius: 9999px;
+  border: 1px solid rgba(123, 82, 255, 0.1);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(123, 82, 255, 0.5);
+}
+
+/* Firefox support */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(123, 82, 255, 0.3) rgba(10, 5, 26, 0.4);
+}

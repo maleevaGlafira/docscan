@@ -1,6 +1,26 @@
+export function isHtmlString(text: string): boolean {
+  const trimmed = text.trim();
+  // Simple check for HTML tags
+  return /<[a-z][\s\S]*>/i.test(trimmed);
+}
+
+export function cleanHtmlString(text: string): string {
+  let cleaned = text.trim();
+  // Strip code block backticks if present
+  cleaned = cleaned.replace(/^```html\s*/i, '');
+  cleaned = cleaned.replace(/^```\s*/i, '');
+  cleaned = cleaned.replace(/\s*```$/i, '');
+  return cleaned.trim();
+}
+
 export function postProcessText(text: string): string {
+  const cleaned = cleanHtmlString(text);
+  if (isHtmlString(cleaned)) {
+    return cleaned;
+  }
+
   // 1. Correct common OCR mistakes
-  let processedText = correctOcrMistakes(text);
+  let processedText = correctOcrMistakes(cleaned);
 
   // 2. Format paragraphs
   // Split by newlines, trim lines, remove empty lines
