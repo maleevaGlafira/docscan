@@ -1,24 +1,56 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Download, ArrowLeft, RefreshCw, CloudUpload, CheckCircle, Database, Loader2, X, ChevronRight, History, Eye, Code } from 'lucide-react';
+import { Copy, Download, ArrowLeft, RefreshCw, CloudUpload, CheckCircle, Database, Loader2, X, ChevronRight, History, Eye, Code, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { postProcessText, isHtmlString } from '@/utils/postProcess';
-import { saveDocument, subscribeToSavedDocuments, SavedDocument } from '@/services/firebase';
+import { saveDocument, subscribeToSavedDocuments, SavedDocument, updateDocument, deleteDocument } from '@/services/firebase';
 import { getPdfPreview } from '@/services/ocr';
 
 interface ResultScreenProps {
   initialText: string;
   onRecognizeNewFiles: (newFiles: File[]) => void;
+  initialFileModifiedAt?: Date | null;
+  initialScannedAt?: Date | null;
 }
 
 const MAX_FILES = 3;
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/bmp'];
 
-export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenProps) {
+const getStatusStyles = (status: string) => {
+  switch (status) {
+    case 'Написано':
+      return { bg: 'bg-blue-500/10 border-blue-500/25', text: 'text-blue-300', label: '✍️ Написано' };
+    case 'Отсканировано':
+      return { bg: 'bg-purple-500/10 border-purple-500/25', text: 'text-purple-300', label: '🔍 Отсканировано' };
+    case 'Исправлено':
+      return { bg: 'bg-amber-500/10 border-amber-500/25', text: 'text-amber-300', label: '✏️ Исправлено' };
+    case 'Отослано':
+      return { bg: 'bg-pink-500/10 border-pink-500/25', text: 'text-pink-300', label: '📤 Отослано' };
+    case 'Выполнено':
+      return { bg: 'bg-emerald-500/10 border-emerald-500/25', text: 'text-emerald-300', label: '✅ Выполнено' };
+    default:
+      return { bg: 'bg-zinc-500/10 border-zinc-500/25', text: 'text-zinc-300', label: status || 'Unknown' };
+  }
+};
+
+export function ResultScreen({ 
+  initialText, 
+  onRecognizeNewFiles,
+  initialFileModifiedAt = null,
+  initialScannedAt = null
+}: ResultScreenProps) {
   const [text, setText] = useState(() => postProcessText(initialText));
   const [viewMode, setViewMode] = useState<'preview' | 'edit'>('preview');
   const [isSaving, setIsSaving] = useState(false);
   const [saveInfo, setSaveInfo] = useState<{ id: string; savedToCloud: boolean; timestamp: Date } | null>(null);
+  
+  // Document state management
+  const [loadedDocId, setLoadedDocId] = useState<string | null>(null);
+  const [baselineText, setBaselineText] = useState(() => postProcessText(initialText));
+  const [currentStatus, setCurrentStatus] = useState<'Написано' | 'Отсканировано' | 'Исправлено' | 'Отослано' | 'Выполнено'>('Отсканировано');
+  
+  const [fileModifiedAt, setFileModifiedAt] = useState<Date | null>(initialFileModifiedAt);
+  const [scannedAt, setScannedAt] = useState<Date | null>(initialScannedAt);
   
   const [historyDocs, setHistoryDocs] = useState<SavedDocument[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -30,6 +62,81 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // States for keyboard text entry
+  const [emptyStateMode, setEmptyStateMode] = useState<'upload' | 'manual'>('upload');
+  const [manualMode, setManualMode] = useState<'plain' | 'template'>('plain');
+  const [manualText, setManualText] = useState('');
+  const [templateTo, setTemplateTo] = useState('');
+  const [templateFrom, setTemplateFrom] = useState('');
+  const [templateSubject, setTemplateSubject] = useState('');
+  const [templateBody, setTemplateBody] = useState('');
+
+  const handleCreateManualDocument = () => {
+    let finalContent = '';
+    
+    if (manualMode === 'plain') {
+      if (!manualText.trim()) {
+        toast.error('Введите текст служебной записки');
+        return;
+      }
+      finalContent = postProcessText(manualText);
+    } else {
+      if (!templateBody.trim()) {
+        toast.error('Заполните основной текст служебной записки');
+        return;
+      }
+      
+      const dateStr = new Date().toLocaleDateString('ru-RU');
+      
+      finalContent = `
+<div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; line-height: 1.5; color: #111111; padding: 20px; background-color: #ffffff; border-radius: 8px;">
+  ${templateTo || templateFrom ? `
+  <div style="margin-left: auto; width: 60%; font-size: 13px; line-height: 1.4; margin-bottom: 30px; border-left: 2px solid #7B52FF; padding-left: 10px;">
+    ${templateTo ? `<div><strong>Кому:</strong> ${templateTo}</div>` : ''}
+    ${templateFrom ? `<div style="margin-top: 4px;"><strong>От кого:</strong> ${templateFrom}</div>` : ''}
+  </div>
+  ` : ''}
+  
+  <div style="text-align: center; margin-bottom: 25px; margin-top: 10px;">
+    <h1 style="font-size: 20px; font-weight: 800; letter-spacing: 1.5px; margin: 0; text-transform: uppercase; color: #000000;">СЛУЖЕБНАЯ ЗАПИСКА</h1>
+    ${templateSubject ? `<div style="font-size: 14px; font-weight: bold; margin-top: 10px; color: #444444;">Тема: ${templateSubject}</div>` : ''}
+  </div>
+  
+  <div style="font-size: 14px; text-align: justify; margin-bottom: 35px; white-space: pre-wrap; color: #111111;">
+${templateBody}
+  </div>
+  
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; font-size: 13px; border-top: 1px dashed #cccccc; padding-top: 15px; margin-top: 30px;">
+    <div>
+      <strong>Дата создания:</strong> ${dateStr}
+    </div>
+    <div style="text-align: right;">
+      <strong>Подпись:</strong> _________________
+    </div>
+  </div>
+</div>
+      `.trim();
+    }
+    
+    setText(finalContent);
+    setBaselineText(finalContent);
+    setLoadedDocId(null);
+    setSaveInfo(null);
+    setCurrentStatus('Написано');
+    
+    // Set timestamp metadata
+    setFileModifiedAt(null); // live typed, so no local file modification date
+    setScannedAt(new Date()); // time when submitted
+    
+    if (isHtmlString(finalContent)) {
+      setViewMode('preview');
+    } else {
+      setViewMode('edit');
+    }
+    
+    toast.success('Служебная записка успешно создана!');
+  };
 
   useEffect(() => {
     let active = true;
@@ -108,13 +215,38 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
   useEffect(() => {
     const processed = postProcessText(initialText);
     setText(processed);
+    setBaselineText(processed);
+    setLoadedDocId(null);
     setSaveInfo(null);
+    setCurrentStatus(processed.trim() ? 'Отсканировано' : 'Написано');
+    setFileModifiedAt(initialFileModifiedAt);
+    setScannedAt(initialScannedAt);
     if (isHtmlString(processed)) {
       setViewMode('preview');
     } else {
       setViewMode('edit');
     }
-  }, [initialText]);
+  }, [initialText, initialFileModifiedAt, initialScannedAt]);
+
+  // Automatic status transitions based on user typing edits
+  useEffect(() => {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      if (currentStatus !== 'Написано') {
+        setCurrentStatus('Написано');
+        setBaselineText('');
+        toast.info('Рабочая область очищена. Статус изменен на "Написано"');
+      }
+    } else {
+      const trimmedBaseline = baselineText.trim();
+      if (trimmedBaseline !== '' && trimmed !== trimmedBaseline) {
+        if (currentStatus === 'Отсканировано') {
+          setCurrentStatus('Исправлено');
+          toast.info('Текст изменен. Статус обновлен на "Исправлено"');
+        }
+      }
+    }
+  }, [text, baselineText, currentStatus]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -164,21 +296,39 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
 
   const handleSaveToFirebase = async () => {
     if (!text.trim()) {
-      toast.error('Cannot save empty document');
+      toast.error('Нельзя сохранить пустой документ');
       return;
     }
     setIsSaving(true);
     try {
-      const result = await saveDocument(text);
-      setSaveInfo(result);
-      if (result.savedToCloud) {
-        toast.success(`Successfully saved to Firestore! Document ID: ${result.id}`);
+      if (loadedDocId) {
+        // Update existing document
+        const success = await updateDocument(loadedDocId, {
+          text,
+          status: currentStatus,
+          fileModifiedAt,
+          scannedAt
+        });
+        if (success) {
+          setSaveInfo({ id: loadedDocId, savedToCloud: true, timestamp: new Date() });
+          toast.success(`Изменения сохранены! ID: ${loadedDocId}`);
+        } else {
+          toast.error('Не удалось сохранить изменения');
+        }
       } else {
-        toast.info(`Stored on device! Complete Firebase setup in the workspace to sync.`);
+        // Save new document
+        const result = await saveDocument(text, currentStatus, fileModifiedAt, scannedAt);
+        setSaveInfo(result);
+        setLoadedDocId(result.id);
+        if (result.savedToCloud) {
+          toast.success(`Документ успешно сохранен в облаке Firestore! ID: ${result.id}`);
+        } else {
+          toast.warning(`Документ сохранен локально на устройстве (облако недоступно). ID: ${result.id}`);
+        }
       }
     } catch (err: any) {
       console.error(err);
-      toast.error('Error occurred while communicating with database.');
+      toast.error('Произошла ошибка при сохранении документа.');
     } finally {
       setIsSaving(false);
     }
@@ -283,89 +433,305 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
                 </div>
               </div>
             ) : text.trim().length === 0 ? (
-              <div 
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`flex-1 w-full flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group min-h-[300px] ${
-                  isDragging 
-                    ? 'border-[#7B52FF] bg-[#7B52FF]/10 shadow-[0_0_30px_rgba(123,82,255,0.2)]'
-                    : 'border-[#7B52FF]/20 bg-[#0A051A]/60 hover:border-[#7B52FF]/40 hover:bg-[#7B52FF]/5'
-                }`}
-              >
-                {/* Visual grid behind it for a high-tech scanner look */}
-                <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#7B52FF_1px,transparent_1px)] [background-size:16px_16px]" />
-                
-                {/* Glowing orb accent */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#7B52FF]/10 rounded-full blur-3xl pointer-events-none group-hover:bg-[#7B52FF]/15 transition-all duration-300" />
-
-                <div className="relative z-10 flex flex-col items-center max-w-sm mx-auto space-y-6">
-                  <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-[#7B52FF]/15 to-transparent border border-[#7B52FF]/20 flex items-center justify-center text-[#A689FF] shadow-lg shadow-black/20 group-hover:scale-110 group-hover:border-[#7B52FF]/40 transition-all duration-300">
-                    <CloudUpload className="h-10 w-10 animate-pulse text-[#7B52FF]" />
+              <div className="flex-1 flex flex-col min-h-0 w-full gap-4">
+                {/* Mode Selector for Empty State */}
+                <div className="flex justify-center shrink-0">
+                  <div className="bg-[#130B2B] p-1 rounded-xl border border-[#7B52FF]/20 flex gap-1">
+                    <button
+                      onClick={() => setEmptyStateMode('upload')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold font-sans flex items-center gap-2 transition-all cursor-pointer border-none ${
+                        emptyStateMode === 'upload'
+                          ? 'bg-[#7B52FF] text-white shadow-md shadow-[#7B52FF]/20'
+                          : 'text-[#B5AED7]/60 hover:text-white hover:bg-[#7B52FF]/10'
+                      }`}
+                    >
+                      <CloudUpload className="h-4 w-4" />
+                      Сканировать файлы
+                    </button>
+                    <button
+                      onClick={() => setEmptyStateMode('manual')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold font-sans flex items-center gap-2 transition-all cursor-pointer border-none ${
+                        emptyStateMode === 'manual'
+                          ? 'bg-[#7B52FF] text-white shadow-md shadow-[#7B52FF]/20'
+                          : 'text-[#B5AED7]/60 hover:text-white hover:bg-[#7B52FF]/10'
+                      }`}
+                    >
+                      <Code className="h-4 w-4" />
+                      Ввести вручную
+                    </button>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <h3 className="font-sans font-bold text-lg text-white">
-                      Load Documents to Begin
-                    </h3>
-                    <p className="text-sm text-[#B5AED7]/60 leading-relaxed font-sans">
-                      Drag and drop your files here, or <span className="text-[#A689FF] font-semibold underline underline-offset-4 decoration-2 hover:text-[#916CFF]">click to browse</span>
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                    <span className="text-[10px] font-mono leading-none font-bold text-[#A689FF] bg-[#7B52FF]/10 px-2.5 py-1.5 rounded-lg border border-[#7B52FF]/20">
-                      PDF
-                    </span>
-                    <span className="text-[10px] font-mono leading-none font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
-                      JPG
-                    </span>
-                    <span className="text-[10px] font-mono leading-none font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20">
-                      PNG
-                    </span>
-                    <span className="text-[10px] font-mono leading-none font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1.5 rounded-lg border border-purple-500/20">
-                      BMP
-                    </span>
-                  </div>
-
-                  <p className="text-[10px] text-[#B5AED7]/40 font-semibold tracking-wider uppercase">
-                    Up to 3 files simultaneously
-                  </p>
                 </div>
+
+                {emptyStateMode === 'upload' ? (
+                  <div 
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`flex-1 w-full flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group min-h-[300px] ${
+                      isDragging 
+                        ? 'border-[#7B52FF] bg-[#7B52FF]/10 shadow-[0_0_30px_rgba(123,82,255,0.2)]'
+                        : 'border-[#7B52FF]/20 bg-[#0A051A]/60 hover:border-[#7B52FF]/40 hover:bg-[#7B52FF]/5'
+                    }`}
+                  >
+                    {/* Visual grid behind it for a high-tech scanner look */}
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#7B52FF_1px,transparent_1px)] [background-size:16px_16px]" />
+                    
+                    {/* Glowing orb accent */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#7B52FF]/10 rounded-full blur-3xl pointer-events-none group-hover:bg-[#7B52FF]/15 transition-all duration-300" />
+
+                    <div className="relative z-10 flex flex-col items-center max-w-sm mx-auto space-y-6">
+                      <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-[#7B52FF]/15 to-transparent border border-[#7B52FF]/20 flex items-center justify-center text-[#A689FF] shadow-lg shadow-black/20 group-hover:scale-110 group-hover:border-[#7B52FF]/40 transition-all duration-300">
+                        <CloudUpload className="h-10 w-10 animate-pulse text-[#7B52FF]" />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <h3 className="font-sans font-bold text-lg text-white">
+                          Загрузите документы для начала
+                        </h3>
+                        <p className="text-sm text-[#B5AED7]/60 leading-relaxed font-sans">
+                          Перетащите файлы сюда или <span className="text-[#A689FF] font-semibold underline underline-offset-4 decoration-2 hover:text-[#916CFF]">выберите на компьютере</span>
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                        <span className="text-[10px] font-mono leading-none font-bold text-[#A689FF] bg-[#7B52FF]/10 px-2.5 py-1.5 rounded-lg border border-[#7B52FF]/20">
+                          PDF
+                        </span>
+                        <span className="text-[10px] font-mono leading-none font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                          JPG
+                        </span>
+                        <span className="text-[10px] font-mono leading-none font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20">
+                          PNG
+                        </span>
+                        <span className="text-[10px] font-mono leading-none font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1.5 rounded-lg border border-purple-500/20">
+                          BMP
+                        </span>
+                      </div>
+
+                      <p className="text-[10px] text-[#B5AED7]/40 font-semibold tracking-wider uppercase">
+                        До 3-х файлов одновременно
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* Keyboard Manual Entry Form */
+                  <div className="flex-1 w-full bg-[#130B2B]/40 border border-[#7B52FF]/15 rounded-xl p-4 sm:p-6 overflow-y-auto flex flex-col justify-between max-w-2xl mx-auto custom-scrollbar">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#7B52FF]/10 pb-3">
+                        <h3 className="text-sm font-sans font-bold text-white uppercase tracking-wider">
+                          Новая служебная записка (ввод с клавиатуры)
+                        </h3>
+                        
+                        <div className="flex bg-[#0A051A] p-1 rounded-lg border border-[#7B52FF]/10 text-[11px] font-bold">
+                          <button
+                            onClick={() => setManualMode('plain')}
+                            className={`px-3 py-1 rounded-md cursor-pointer transition-all border-none ${
+                              manualMode === 'plain'
+                                ? 'bg-[#7B52FF] text-white shadow-sm'
+                                : 'text-[#B5AED7]/60 hover:text-white'
+                            }`}
+                          >
+                            Простой текст
+                          </button>
+                          <button
+                            onClick={() => setManualMode('template')}
+                            className={`px-3 py-1 rounded-md cursor-pointer transition-all border-none ${
+                              manualMode === 'template'
+                                ? 'bg-[#7B52FF] text-white shadow-sm'
+                                : 'text-[#B5AED7]/60 hover:text-white'
+                            }`}
+                          >
+                            Официальный шаблон
+                          </button>
+                        </div>
+                      </div>
+
+                      {manualMode === 'plain' ? (
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-[#A689FF] uppercase tracking-wider block">
+                            Текст документа
+                          </label>
+                          <textarea
+                            value={manualText}
+                            onChange={(e) => setManualText(e.target.value)}
+                            placeholder="Введите или вставьте текст вашей служебной записки..."
+                            className="w-full h-72 sm:h-80 bg-[#0A051A]/80 text-white rounded-xl border border-[#7B52FF]/25 focus:border-[#7B52FF]/60 focus:ring-1 focus:ring-[#7B52FF]/50 p-4 font-sans text-sm outline-none resize-none transition-all placeholder:text-[#B5AED7]/30 custom-scrollbar"
+                          />
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#A689FF] uppercase tracking-wider block">
+                              Кому (Адресат / Должность / ФИО)
+                            </label>
+                            <input
+                              type="text"
+                              value={templateTo}
+                              onChange={(e) => setTemplateTo(e.target.value)}
+                              placeholder="Директору департамента Иванову И.И."
+                              className="w-full bg-[#0A051A]/80 text-white rounded-xl border border-[#7B52FF]/25 focus:border-[#7B52FF]/60 p-3 font-sans text-xs outline-none transition-all placeholder:text-[#B5AED7]/30"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#A689FF] uppercase tracking-wider block">
+                              От кого (Должность / ФИО)
+                            </label>
+                            <input
+                              type="text"
+                              value={templateFrom}
+                              onChange={(e) => setTemplateFrom(e.target.value)}
+                              placeholder="Руководителя группы Петрова П.П."
+                              className="w-full bg-[#0A051A]/80 text-white rounded-xl border border-[#7B52FF]/25 focus:border-[#7B52FF]/60 p-3 font-sans text-xs outline-none transition-all placeholder:text-[#B5AED7]/30"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-bold text-[#A689FF] uppercase tracking-wider block">
+                              Тема (Краткое содержание)
+                            </label>
+                            <input
+                              type="text"
+                              value={templateSubject}
+                              onChange={(e) => setTemplateSubject(e.target.value)}
+                              placeholder="О закупке оборудования для нового отдела"
+                              className="w-full bg-[#0A051A]/80 text-white rounded-xl border border-[#7B52FF]/25 focus:border-[#7B52FF]/60 p-3 font-sans text-xs outline-none transition-all placeholder:text-[#B5AED7]/30"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-bold text-[#A689FF] uppercase tracking-wider block">
+                              Основной текст записки
+                            </label>
+                            <textarea
+                              value={templateBody}
+                              onChange={(e) => setTemplateBody(e.target.value)}
+                              placeholder="В связи с производственной необходимостью, прошу согласовать закупку..."
+                              className="w-full h-44 bg-[#0A051A]/80 text-white rounded-xl border border-[#7B52FF]/25 focus:border-[#7B52FF]/60 focus:ring-1 focus:ring-[#7B52FF]/50 p-4 font-sans text-xs outline-none resize-none transition-all placeholder:text-[#B5AED7]/30 custom-scrollbar"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-6 border-t border-[#7B52FF]/10 mt-6 shrink-0 flex flex-col sm:flex-row gap-3 w-full justify-end">
+                      <button
+                        onClick={() => {
+                          setEmptyStateMode('upload');
+                        }}
+                        className="px-5 py-3 border border-[#7B52FF]/20 hover:border-[#7B52FF]/45 text-[#B5AED7]/80 hover:text-white rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer bg-transparent"
+                      >
+                        Назад к загрузке
+                      </button>
+                      <button
+                        onClick={handleCreateManualDocument}
+                        className="px-6 py-3 bg-gradient-to-r from-[#7B52FF] to-[#926CFF] hover:from-[#6A3DFF] hover:to-[#8356FF] text-white rounded-xl font-sans font-black text-xs tracking-wider uppercase shadow-xl shadow-[#7B52FF]/15 flex items-center justify-center gap-2 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] cursor-pointer border-none"
+                      >
+                        <span>Создать служебку</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex-1 flex flex-col h-full overflow-hidden gap-3">
                 {/* View Mode Toggle Controls */}
-                <div className="flex items-center justify-between bg-[#130B2B]/60 p-2 rounded-xl border border-[#7B52FF]/15 shrink-0">
-                  <span className="text-[10px] font-sans font-bold text-[#B5AED7]/60 uppercase tracking-widest pl-2">
-                    Workspace Mode:
-                  </span>
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => setViewMode('preview')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold font-sans flex items-center gap-1.5 transition-all cursor-pointer border-none ${
-                        viewMode === 'preview'
-                          ? 'bg-[#7B52FF] text-white shadow-md shadow-[#7B52FF]/20'
-                          : 'text-[#B5AED7]/70 hover:text-white hover:bg-[#7B52FF]/10'
-                      }`}
+                <div className="flex flex-wrap items-center justify-between bg-[#130B2B]/60 p-2 rounded-xl border border-[#7B52FF]/15 shrink-0 gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-sans font-bold text-[#B5AED7]/60 uppercase tracking-widest pl-2">
+                      Workspace Mode:
+                    </span>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => setViewMode('preview')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold font-sans flex items-center gap-1.5 transition-all cursor-pointer border-none ${
+                          viewMode === 'preview'
+                            ? 'bg-[#7B52FF] text-white shadow-md shadow-[#7B52FF]/20'
+                            : 'text-[#B5AED7]/70 hover:text-white hover:bg-[#7B52FF]/10'
+                        }`}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Rendered Document
+                      </button>
+                      <button
+                        onClick={() => setViewMode('edit')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold font-sans flex items-center gap-1.5 transition-all cursor-pointer border-none ${
+                          viewMode === 'edit'
+                            ? 'bg-[#7B52FF] text-white shadow-md shadow-[#7B52FF]/20'
+                            : 'text-[#B5AED7]/70 hover:text-white hover:bg-[#7B52FF]/10'
+                        }`}
+                      >
+                        <Code className="h-3.5 w-3.5" />
+                        HTML Code
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Document Status Select */}
+                  <div className="flex items-center gap-2 pr-1">
+                    <span className="text-[10px] font-sans font-bold text-[#B5AED7]/60 uppercase tracking-widest">
+                      Status:
+                    </span>
+                    <select
+                      value={currentStatus}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value as any;
+                        setCurrentStatus(newStatus);
+                        if (loadedDocId) {
+                          const success = await updateDocument(loadedDocId, { status: newStatus });
+                          if (success) {
+                            toast.success(`Статус изменен на "${newStatus}"`);
+                            if (saveInfo) {
+                              setSaveInfo({ ...saveInfo, timestamp: new Date() });
+                            }
+                          } else {
+                            toast.error('Не удалось обновить статус');
+                          }
+                        } else {
+                          toast.info(`Status set to "${newStatus}". Save document to persist.`);
+                        }
+                      }}
+                      className={`text-xs font-bold rounded-lg border px-2.5 py-1 outline-none transition-all cursor-pointer font-sans bg-[#0F0827] ${getStatusStyles(currentStatus).text} ${getStatusStyles(currentStatus).bg}`}
                     >
-                      <Eye className="h-3.5 w-3.5" />
-                      Rendered Document
-                    </button>
-                    <button
-                      onClick={() => setViewMode('edit')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold font-sans flex items-center gap-1.5 transition-all cursor-pointer border-none ${
-                        viewMode === 'edit'
-                          ? 'bg-[#7B52FF] text-white shadow-md shadow-[#7B52FF]/20'
-                          : 'text-[#B5AED7]/70 hover:text-white hover:bg-[#7B52FF]/10'
-                      }`}
-                    >
-                      <Code className="h-3.5 w-3.5" />
-                      HTML Code
-                    </button>
+                      <option value="Написано" className="bg-[#140C2D] text-blue-300">✍️ Написано</option>
+                      <option value="Отсканировано" className="bg-[#140C2D] text-purple-300">🔍 Отсканировано</option>
+                      <option value="Исправлено" className="bg-[#140C2D] text-amber-300">✏️ Исправлено</option>
+                      <option value="Отослано" className="bg-[#140C2D] text-pink-300">📤 Отослано</option>
+                      <option value="Выполнено" className="bg-[#140C2D] text-emerald-300">✅ Выполнено</option>
+                    </select>
                   </div>
                 </div>
+
+                {/* File Metadata Bar */}
+                {(fileModifiedAt || scannedAt) && (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-[#1A1237]/40 px-4 py-2.5 rounded-xl border border-[#7B52FF]/10 text-xs text-[#B5AED7]/80 gap-3">
+                    <div className="flex flex-wrap items-center gap-4">
+                      {fileModifiedAt && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[#A689FF] font-sans font-bold uppercase text-[9px] tracking-wider">Дата изменения:</span>
+                          <span className="font-mono bg-[#7B52FF]/10 px-2 py-0.5 rounded border border-[#7B52FF]/15 text-white">
+                            {fileModifiedAt.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {scannedAt && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-400 font-sans font-bold uppercase text-[9px] tracking-wider">Сканировано:</span>
+                          <span className="font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/15 text-white">
+                            {scannedAt.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-1.5 text-[10px] text-[#B5AED7]/50 max-w-sm leading-tight">
+                      <Info className="h-3.5 w-3.5 text-[#7B52FF] shrink-0" />
+                      <span>Дата создания на диске заменяется датой последнего изменения из-за ограничений безопасности браузера.</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Content Panel */}
                 <div className="flex-1 overflow-hidden relative">
@@ -404,7 +770,7 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-3 custom-scrollbar">
                 {loadingHistory ? (
                   <div className="text-center py-12 text-[#B5AED7]/50 text-xs flex flex-col items-center justify-center gap-2">
                     <Loader2 className="h-5 w-5 animate-spin text-[#7B52FF]" />
@@ -422,6 +788,12 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
                       key={docItem.id}
                       onClick={() => {
                         setText(docItem.text);
+                        setBaselineText(docItem.text);
+                        setLoadedDocId(docItem.id);
+                        setCurrentStatus(docItem.status || 'Отсканировано');
+                        setSaveInfo({ id: docItem.id, savedToCloud: docItem.savedToCloud, timestamp: docItem.statusUpdatedAt });
+                        setFileModifiedAt(docItem.fileModifiedAt || null);
+                        setScannedAt(docItem.scannedAt || null);
                         if (isHtmlString(docItem.text)) {
                           setViewMode('preview');
                         } else {
@@ -429,27 +801,91 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
                         }
                         toast.success('Loaded document from history!');
                       }}
-                      className="p-3.5 bg-[#1A1237]/60 hover:bg-[#22184B] border border-[#7B52FF]/10 hover:border-[#7B52FF]/30 rounded-xl transition-all duration-200 cursor-pointer group text-left relative overflow-hidden flex flex-col gap-2"
+                      className={`p-3.5 border rounded-xl transition-all duration-200 cursor-pointer group text-left relative overflow-hidden flex flex-col gap-2 ${
+                        loadedDocId === docItem.id 
+                          ? 'bg-[#22184B] border-[#7B52FF]/60 shadow-[0_0_15px_rgba(123,82,255,0.15)]' 
+                          : 'bg-[#1A1237]/60 hover:bg-[#22184B] border-[#7B52FF]/10 hover:border-[#7B52FF]/30'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold text-[#A689FF] bg-[#7B52FF]/10 px-1.5 py-0.5 rounded border border-[#7B52FF]/15 select-all">
-                          {docItem.id}
-                        </span>
-                        <span className="text-[10px] text-[#B5AED7]/50">
-                          {docItem.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  {docItem.createdAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono font-bold text-[#A689FF] bg-[#7B52FF]/10 px-1.5 py-0.5 rounded border border-[#7B52FF]/15 select-all">
+                            {docItem.id}
+                          </span>
+                          <span className={`text-[9px] px-1 py-0.5 rounded font-mono ${docItem.savedToCloud ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                            {docItem.savedToCloud ? 'Cloud' : 'Local'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm('Вы уверены, что хотите удалить этот документ?')) {
+                              const success = await deleteDocument(docItem.id);
+                              if (success) {
+                                toast.success('Документ удален');
+                                if (loadedDocId === docItem.id) {
+                                  setText('');
+                                  setBaselineText('');
+                                  setLoadedDocId(null);
+                                  setSaveInfo(null);
+                                }
+                              } else {
+                                toast.error('Не удалось удалить документ');
+                              }
+                            }
+                          }}
+                          className="p-1 hover:bg-rose-500/15 rounded text-rose-400/70 hover:text-rose-400 transition-colors cursor-pointer"
+                          title="Удалить"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       </div>
+
                       <p className="text-xs text-white/95 line-clamp-3 font-sans leading-relaxed break-keep">
                         {docItem.text}
                       </p>
-                      <div className="flex items-center justify-between text-[10px] text-[#B5AED7]/40 pt-1 border-t border-[#7B52FF]/5">
-                        <span className="flex items-center gap-1.5">
-                          <span className={`h-1.5 w-1.5 rounded-full ${docItem.savedToCloud ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-                          {docItem.savedToCloud ? 'Cloud Synced' : 'Local'}
-                        </span>
-                        <span className="text-[#A689FF] font-semibold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          Load <ChevronRight className="h-3 w-3" />
-                        </span>
+
+                      <div className="flex flex-col gap-1.5 pt-1.5 border-t border-[#7B52FF]/5">
+                        <div className="flex items-center justify-between text-[10px] text-[#B5AED7]/40 font-mono">
+                          <div className="flex flex-col gap-0.5">
+                            <span>Создан: {docItem.createdAt.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            <span>Изменен: {docItem.statusUpdatedAt.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            {docItem.fileModifiedAt && (
+                              <span className="text-[#A689FF]">Файл изменен: {new Date(docItem.fileModifiedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            )}
+                            {docItem.scannedAt && (
+                              <span className="text-emerald-400">Сканировано: {new Date(docItem.scannedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div 
+                          className="flex justify-end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <select
+                            value={docItem.status || 'Отсканировано'}
+                            onChange={async (e) => {
+                              const newStatus = e.target.value as any;
+                              const success = await updateDocument(docItem.id, { status: newStatus });
+                              if (success) {
+                                toast.success(`Статус обновлен: ${newStatus}`);
+                                if (loadedDocId === docItem.id) {
+                                  setCurrentStatus(newStatus);
+                                }
+                              } else {
+                                toast.error('Ошибка обновления статуса');
+                              }
+                            }}
+                            className={`text-[10px] font-bold rounded-lg border px-2 py-1 outline-none transition-all cursor-pointer font-sans bg-[#0F0827] ${getStatusStyles(docItem.status || 'Отсканировано').text} ${getStatusStyles(docItem.status || 'Отсканировано').bg}`}
+                          >
+                            <option value="Написано" className="bg-[#140C2D] text-blue-300">Написано</option>
+                            <option value="Отсканировано" className="bg-[#140C2D] text-purple-300">Отсканировано</option>
+                            <option value="Исправлено" className="bg-[#140C2D] text-amber-300">Исправлено</option>
+                            <option value="Отослано" className="bg-[#140C2D] text-pink-300">Отослано</option>
+                            <option value="Выполнено" className="bg-[#140C2D] text-emerald-300">Выполнено</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -467,8 +903,19 @@ export function ResultScreen({ initialText, onRecognizeNewFiles }: ResultScreenP
               <button 
                 onClick={() => {
                   setText('');
+                  setBaselineText('');
+                  setLoadedDocId(null);
+                  setCurrentStatus('Написано');
                   setNewFiles([]);
                   setSaveInfo(null);
+                  setFileModifiedAt(null);
+                  setScannedAt(null);
+                  setManualText('');
+                  setTemplateTo('');
+                  setTemplateFrom('');
+                  setTemplateSubject('');
+                  setTemplateBody('');
+                  setEmptyStateMode('upload');
                   toast.success('Workspace reset. Ready to scan new files.');
                 }}
                 className="p-2.5 sm:px-4 sm:py-2 bg-rose-500/10 text-rose-400 border border-rose-500/25 hover:border-rose-500/50 hover:bg-rose-500/20 text-xs font-bold rounded-xl flex items-center gap-2 transition-all duration-200 cursor-pointer shadow-sm font-sans"

@@ -13,13 +13,23 @@
           "type": "string",
           "description": "The recognized text content"
         },
+        "status": {
+          "type": "string",
+          "enum": ["Написано", "Отсканировано", "Исправлено", "Отослано", "Выполнено"],
+          "description": "Current status of the document"
+        },
+        "statusUpdatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the status was last changed"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
           "description": "Creation timestamp"
         }
       },
-      "required": ["text", "createdAt"]
+      "required": ["text", "createdAt", "status", "statusUpdatedAt"]
     }
   },
   "firestore": {

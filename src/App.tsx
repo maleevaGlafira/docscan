@@ -16,6 +16,8 @@ export default function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [screen, setScreen] = useState<'processing' | 'result'>('result');
   const [recognizedText, setRecognizedText] = useState('');
+  const [fileModifiedAt, setFileModifiedAt] = useState<Date | null>(null);
+  const [scannedAt, setScannedAt] = useState<Date | null>(null);
   
   // Progress state
   const [progress, setProgress] = useState(0);
@@ -30,11 +32,18 @@ export default function App() {
     setStatus('Initializing OCR engine...');
     
     try {
+      const times = filesToProcess.map(f => f.lastModified).filter(Boolean);
+      const newestTime = times.length > 0 ? Math.max(...times) : Date.now();
+      const fileModifiedDate = new Date(newestTime);
+      const scanDate = new Date();
+
       const text = await recognizeText(filesToProcess, (p, msg) => {
         setProgress(Math.round(p * 100));
         setStatus(msg);
       });
       
+      setFileModifiedAt(fileModifiedDate);
+      setScannedAt(scanDate);
       setRecognizedText(text);
       setScreen('result');
       toast.success('Text recognized successfully!');
@@ -103,6 +112,8 @@ export default function App() {
         {screen === 'result' && (
           <ResultScreen 
             initialText={recognizedText} 
+            initialFileModifiedAt={fileModifiedAt}
+            initialScannedAt={scannedAt}
             onRecognizeNewFiles={(newFiles) => {
               setFiles(newFiles);
               handleRecognize(newFiles);

@@ -11,7 +11,13 @@ OCR Pro is a modern Single Page Application (SPA) designed to instantly extract 
 - **Drag & Drop:** Fully-featured drag-and-drop file upload with reorder functionality.
 - **Client-Side OCR:** All processing happens in your browser using `Tesseract.js` for privacy and speed.
 - **Smart Post-Processing:** Automatically formats recognized text by adding indentation (3 spaces) before paragraphs and spacing between them. Also corrects common OCR artifacts and spelling mistakes.
-- **Export Formats:** Easily copy text to the clipboard or download it as a `.txt` file.
+- **Firebase Firestore Integration:** Real-time persistence of processed documents with robust status management.
+- **Document Lifecycle & Auto-Transitions:**
+  - **Написано (Written):** Automatically detected when writing from scratch or clearing the workspace.
+  - **Отсканировано (Scanned):** Default status for newly processed scan text.
+  - **Исправлено (Corrected):** Automatically transitions here if the user modifies any scanned content in the editor.
+  - **Отослано (Sent) & Выполнено (Completed):** Available for manual selection to track sending and completion status.
+- **Interactive History Panel:** View creation date, last modification date, and status directly in the card. Supports instant deletions and manual status overrides.
 
 ## 🛠 Tech Stack
 

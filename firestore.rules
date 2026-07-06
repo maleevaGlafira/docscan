@@ -25,19 +25,16 @@ service cloud.firestore {
 
     // Document validation
     function isValidDocument(data) {
-      return data.keys().hasAll(['text', 'createdAt']) 
-        && data.keys().size() == 2
-        && data.text is string 
-        && data.text.size() <= 1000000
-        && data.createdAt == request.time;
+      return data.keys().hasAll(['text']) 
+        && data.text is string;
     }
 
     match /documents/{docId} {
       allow get: if true;
       allow list: if true;
       allow create: if isValidId(docId) && isValidDocument(incoming());
-      allow update: if false;
-      allow delete: if false;
+      allow update: if isValidId(docId) && isValidDocument(incoming());
+      allow delete: if true;
     }
   }
 }
