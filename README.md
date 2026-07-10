@@ -1,111 +1,72 @@
 # OCR Pro
 
-OCR Pro is a modern Single Page Application (SPA) designed to instantly extract text from images and PDF documents. It features a beautiful drag-and-drop interface and leverages the power of client-side machine learning for text recognition, supporting English, Russian, and Ukrainian out of the box.
-
-[Українська версія нижче](#ocr-pro---українська)
-
-## 🚀 Features
-
-- **Multi-format Support:** Upload and process `PDF`, `JPG`, `PNG`, and `BMP` files.
-- **Batch Processing:** Recognize text from up to 3 files simultaneously.
-- **Drag & Drop:** Fully-featured drag-and-drop file upload with reorder functionality.
-- **Client-Side OCR:** All processing happens in your browser using `Tesseract.js` for privacy and speed.
-- **Smart Post-Processing:** Automatically formats recognized text by adding indentation (3 spaces) before paragraphs and spacing between them. Also corrects common OCR artifacts and spelling mistakes.
-- **Firebase Firestore Integration:** Real-time persistence of processed documents with robust status management.
-- **Document Lifecycle & Auto-Transitions:**
-  - **Написано (Written):** Automatically detected when writing from scratch or clearing the workspace.
-  - **Отсканировано (Scanned):** Default status for newly processed scan text.
-  - **Исправлено (Corrected):** Automatically transitions here if the user modifies any scanned content in the editor.
-  - **Отослано (Sent) & Выполнено (Completed):** Available for manual selection to track sending and completion status.
-- **Interactive History Panel:** View creation date, last modification date, and status directly in the card. Supports instant deletions and manual status overrides.
-
-## 🛠 Tech Stack
-
-- **Framework:** React 19 + TypeScript
-- **Bundler:** Vite
-- **Styling:** Tailwind CSS + shadcn/ui
-- **Core OCR logic:** Tesseract.js
-- **PDF parsing:** pdfjs-dist
-- **Drag and Drop:** @hello-pangea/dnd
-
-## 📦 Requirements
-
-- Node.js >= 18.0.0
-- npm >= 9.x or yarn >= 1.x
-
-## 🏁 How to Run
-
-1. **Install Dependencies:**
-   ```bash
-   npm install
-   ```
-
-2. **Start the Development Server:**
-   ```bash
-   npm run dev
-   ```
-
-3. **Build for Production:**
-   ```bash
-   npm run build
-   ```
-
-## 🔮 Future Plans
-
-- Implement advanced Natural Language Processing (NLP) for superior grammar & spell checking.
-- Add support for converting the recognized text back to Word (`.docx`) or searchable PDF format.
-- Store history of recent recognitions in `localStorage`.
-- Add customizable post-processing settings (font, spacing, dictionary tuning).
+OCR Pro is a modern, high-performance full-stack web application designed for document scanning, optical character recognition (OCR), manual memo insertion, and document status tracking. It utilizes Gemini AI for intelligent, context-aware text recognition and high-fidelity extraction of structured documents in Russian, Ukrainian, and English.
 
 ---
 
-# OCR Pro - Українська
+## 🚀 Key Features / Основні функції
 
-OCR Pro — це сучасний Single Page Application (SPA) для миттєвого розпізнавання тексту з фотографій та PDF-документів. Застосунок має красивий drag-and-drop інтерфейс та використовує потужність machine learning для розпізнавання тексту, підтримуючи англійську, російську та українську мови.
+### 📂 Document Upload & AI-Powered OCR
+- **Supported Formats:** Process `PDF`, `JPG`, `PNG`, and `BMP` files.
+- **Batch Processing:** Scan up to 3 documents in parallel.
+- **Drag & Drop:** Elegant workspace layout supporting quick drag-and-drop or manual selection.
+- **AI-Powered OCR:** Integrates with server-side Gemini AI models for highly accurate optical character recognition, retaining formatting and layout.
 
-## 🚀 Основний функціонал
+### 📝 Smart Text Processing & Formatting
+- **Memo Formatting:** Automatically formats paragraphs with traditional 3-space indentation, inserts empty lines between blocks, and cleans common OCR noise.
+- **Manual Memo Entry:** Don't have a scanner? Input text directly or use our **Official Document Template** with structured fields: *To (Кому)*, *From (Кто)*, *Subject (Тема)*, and *Body (Текст)*.
 
-- **Підтримка форматів:** Завантаження та обробка `PDF`, `JPG`, `PNG` та `BMP` файлів.
-- **Пакетна обробка:** Можливість обробляти до 3 файлів одночасно.
-- **Drag & Drop:** Повноцінне завантаження з можливістю зміни порядку файлів перетягуванням.
-- **Клієнтський OCR:** Вся обробка відбувається безпосередньо у Вашому браузері за допомогою `Tesseract.js`.
-- **Розумна постобробка:** Текст автоматично форматується: перед кожним абзацом додається 3 пробіли, а після абзацу – пустий рядок. Також виправляються типові помилки розпізнавання (артефакти OCR).
-- **Експорт:** Можливість скопіювати текст у буфер обміну або завантажити як `.txt` файл.
+### 💾 Robust Persistence & Metadata Tracking
+- **Durable Storage:** Connected to **Firebase Firestore** with transparent, automated local fallback tracking via `localStorage` if connection is offline.
+- **File Name Persistence:** Saves the original files' names and associates them with the processed records.
+- **Accurate Date Tracking:** Displays the original file modified date alongside the scan execution date.
 
-## 🛠 Використовувані технології
+### ⚠️ Duplicate Prevention System
+- **Real-Time Duplicate Checking:** Before starting any text recognition, OCR Pro cross-references queued files against saved history records by comparing both the **File Name** and **Last Modification Date**.
+- **Intuitive Overlay Alerts:** Displays a customized UI confirmation dialog (avoiding browser alert blocks) if a duplicate file is detected, prompting the user whether to proceed.
 
-- **Фреймворк:** React 19 + TypeScript
-- **Збірка:** Vite
-- **Стилізація:** Tailwind CSS + shadcn/ui
-- **Логіка OCR:** Tesseract.js
-- **Обробка PDF:** pdfjs-dist
-- **Drag and Drop:** @hello-pangea/dnd
+### 🔄 Document Status Lifecycle & History
+- **Написано (Written):** Detected automatically for manually typed or templated notes.
+- **Отсканировано (Scanned):** Set automatically upon completing OCR recognition.
+- **Исправлено (Corrected):** Auto-transitions here as soon as a user edits scanned text in the editor.
+- **Отослано (Sent) & Выполнено (Completed):** Available for manual selection to track sending and compliance.
+- **Status Change History:** Every status modification is recorded chronologically as a history log entry with exact timestamps.
+- **Visual Timelines:** View a detailed vertical timeline list of status history for the active document directly in the workspace, plus mini logs inside history cards.
+- **Durable Persistence:** The status transition history is stored securely inside the database (Firestore) and localStorage fallback.
 
-## 📦 Вимоги до оточення
+### 🔍 Advanced Search & Filtering Engine
+- **Text Search Query:** Instantly search through saved documents in real-time by **File Name**, document **Content Text**, or unique document **ID**.
+- **Dynamic Sorting:** Sort saved records dynamically by:
+  - **Upload Date** (Newest/Oldest first)
+  - **Modification/Status Update Date** (Newest/Oldest first)
+  - **File Name** (Alphabetical A-Z / Z-A)
+- **Advanced Date Filtering:** Narrow down your document history with dedicated calendar pickers matching exact **Upload Date** and/or **Modification Date**.
 
-- Node.js >= 18.0.0
-- npm >= 9.x або yarn >= 1.x
+---
 
-## 🏁 Як запустити проект
+## 🛠 Tech Stack / Технологічний стек
 
-1. **Встановіть залежності:**
+- **Frontend Framework:** React + TypeScript + Vite
+- **OCR Engine:** Gemini AI API (Server-side document processing)
+- **PDF Renderer:** pdfjs-dist (for PDF to image conversion)
+- **Database Engine:** Firebase Firestore (with persistent client fallbacks)
+- **Styling:** Tailwind CSS (Modern dark cyberpunk theme, customized sleek custom scrollbars)
+
+---
+
+## 🏁 Quick Start / Як запустити
+
+1. **Install dependencies:**
    ```bash
    npm install
    ```
 
-2. **Запустіть сервер для розробки:**
+2. **Run in development mode:**
    ```bash
    npm run dev
    ```
 
-3. **Збірка для продакшну:**
+3. **Build for production:**
    ```bash
    npm run build
    ```
-
-## 🔮 Future Plans (Плани на майбутнє)
-
-- Реалізувати розширену обробку природної мови (NLP) для кращої перевірки граматики та орфографії.
-- Додати підтримку експорту розпізнаного тексту назад у `Word (.docx)` або PDF із пошуком.
-- Зберігати історію останніх розпізнавань локально (через `localStorage`).
-- Додати гнучкі налаштування постобробки тексту (відступи, шрифти, редагування словника замін).

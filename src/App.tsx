@@ -18,6 +18,7 @@ export default function App() {
   const [recognizedText, setRecognizedText] = useState('');
   const [fileModifiedAt, setFileModifiedAt] = useState<Date | null>(null);
   const [scannedAt, setScannedAt] = useState<Date | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   
   // Progress state
   const [progress, setProgress] = useState(0);
@@ -36,6 +37,7 @@ export default function App() {
       const newestTime = times.length > 0 ? Math.max(...times) : Date.now();
       const fileModifiedDate = new Date(newestTime);
       const scanDate = new Date();
+      const combinedName = filesToProcess.map(f => f.name).join(', ');
 
       const text = await recognizeText(filesToProcess, (p, msg) => {
         setProgress(Math.round(p * 100));
@@ -44,6 +46,7 @@ export default function App() {
       
       setFileModifiedAt(fileModifiedDate);
       setScannedAt(scanDate);
+      setFileName(combinedName);
       setRecognizedText(text);
       setScreen('result');
       toast.success('Text recognized successfully!');
@@ -114,6 +117,7 @@ export default function App() {
             initialText={recognizedText} 
             initialFileModifiedAt={fileModifiedAt}
             initialScannedAt={scannedAt}
+            initialFileName={fileName}
             onRecognizeNewFiles={(newFiles) => {
               setFiles(newFiles);
               handleRecognize(newFiles);

@@ -1,7 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, doc, setDoc, serverTimestamp, 
-  collection, query, orderBy, getDocs, onSnapshot, limit, Timestamp 
+  collection, query, orderBy, getDocs, onSnapshot, limit, Timestamp,
+  arrayUnion
 } from 'firebase/firestore';
 
 export enum OperationType {
@@ -68,7 +69,8 @@ export async function saveDocument(
   text: string, 
   status: 'Написано' | 'Отсканировано' | 'Исправлено' | 'Отослано' | 'Выполнено' = 'Отсканировано',
   fileModifiedAt?: Date | null,
-  scannedAt?: Date | null
+  scannedAt?: Date | null,
+  fileName?: string | null
 ): Promise<{ id: string; savedToCloud: boolean; timestamp: Date }> {
   const id = 'doc_' + Math.random().toString(36).substring(2, 11);
   const timestamp = new Date();
@@ -80,10 +82,17 @@ export async function saveDocument(
       await setDoc(doc(db, 'documents', id), {
         text,
         status,
+        statusHistory: [
+          {
+            status,
+            updatedAt: timestamp.toISOString()
+          }
+        ],
         createdAt: serverTimestamp(),
         statusUpdatedAt: serverTimestamp(),
         fileModifiedAt: fileModifiedAt || null,
-        scannedAt: scannedAt || null
+        scannedAt: scannedAt || null,
+        fileName: fileName || null
       });
       return { id, savedToCloud: true, timestamp };
     } catch (error) {
@@ -99,10 +108,17 @@ export async function saveDocument(
       id, 
       text, 
       status,
+      statusHistory: [
+        {
+          status,
+          updatedAt: timestamp.toISOString()
+        }
+      ],
       createdAt: timestamp.toISOString(),
       statusUpdatedAt: timestamp.toISOString(),
       fileModifiedAt: fileModifiedAt ? fileModifiedAt.toISOString() : null,
-      scannedAt: scannedAt ? scannedAt.toISOString() : null
+      scannedAt: scannedAt ? scannedAt.toISOString() : null,
+      fileName: fileName || null
     });
     localStorage.setItem('saved_documents', JSON.stringify(documents));
     window.dispatchEvent(new Event('local-documents-updated'));
@@ -123,6 +139,7 @@ export async function updateDocument(
     status: 'Написано' | 'Отсканировано' | 'Исправлено' | 'Отослано' | 'Выполнено';
     fileModifiedAt?: Date | null;
     scannedAt?: Date | null;
+    fileName?: string | null;
   }>
 ): Promise<boolean> {
   const db = await getFirebaseDB();
@@ -131,10 +148,17 @@ export async function updateDocument(
   if (db) {
     const path = `documents/${id}`;
     try {
-      await setDoc(doc(db, 'documents', id), {
+      const updateData: any = {
         ...fields,
         statusUpdatedAt: serverTimestamp()
-      }, { merge: true });
+      };
+      if (fields.status) {
+        updateData.statusHistory = arrayUnion({
+          status: fields.status,
+          updatedAt: timestamp.toISOString()
+        });
+      }
+      await setDoc(doc(db, 'documents', id), updateData, { merge: true });
       return true;
     } catch (error) {
       console.error('Failed to update document in Firestore, falling back to local storage:', error);
@@ -154,9 +178,19 @@ export async function updateDocument(
       if (fields.scannedAt) {
         localFields.scannedAt = fields.scannedAt.toISOString();
       }
+      
+      const currentHistory = documents[index].statusHistory || [];
+      if (fields.status) {
+        currentHistory.push({
+          status: fields.status,
+          updatedAt: timestamp.toISOString()
+        });
+      }
+
       documents[index] = {
         ...documents[index],
         ...localFields,
+        statusHistory: currentHistory,
         statusUpdatedAt: timestamp.toISOString()
       };
       localStorage.setItem('saved_documents', JSON.stringify(documents));
@@ -199,15 +233,22 @@ export async function deleteDocument(id: string): Promise<boolean> {
   return false;
 }
 
+export interface StatusHistoryEntry {
+  status: 'Написано' | 'Отсканировано' | 'Исправлено' | 'Отослано' | 'Выполнено';
+  updatedAt: string;
+}
+
 export interface SavedDocument {
   id: string;
   text: string;
   status: 'Написано' | 'Отсканировано' | 'Исправлено' | 'Отослано' | 'Выполнено';
+  statusHistory?: StatusHistoryEntry[];
   statusUpdatedAt: Date;
   createdAt: Date;
   savedToCloud: boolean;
   fileModifiedAt?: Date | null;
   scannedAt?: Date | null;
+  fileName?: string | null;
 }
 
 /**
@@ -284,11 +325,13 @@ export function subscribeToSavedDocuments(
                 id: docSnap.id,
                 text: data.text || '',
                 status: data.status || 'Отсканировано',
+                statusHistory: data.statusHistory || [],
                 statusUpdatedAt: statusUpdatedAtDate,
                 createdAt: createdAtDate,
                 savedToCloud: true,
                 fileModifiedAt: fileModifiedAtDate,
                 scannedAt: scannedAtDate,
+                fileName: data.fileName || null,
               });
             });
             callback(docs);
@@ -325,11 +368,13 @@ function fallbackLocalSubscription(callback: (docs: SavedDocument[]) => void): (
           id: d.id,
           text: d.text,
           status: d.status || 'Отсканировано',
+          statusHistory: d.statusHistory || [],
           statusUpdatedAt: d.statusUpdatedAt ? new Date(d.statusUpdatedAt) : createdAt,
           createdAt,
           savedToCloud: false,
           fileModifiedAt: d.fileModifiedAt ? new Date(d.fileModifiedAt) : null,
-          scannedAt: d.scannedAt ? new Date(d.scannedAt) : null
+          scannedAt: d.scannedAt ? new Date(d.scannedAt) : null,
+          fileName: d.fileName || null
         };
       }).sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
       callback(formatted);

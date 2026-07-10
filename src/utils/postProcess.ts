@@ -4,6 +4,20 @@ export function isHtmlString(text: string): boolean {
   return /<[a-z][\s\S]*>/i.test(trimmed);
 }
 
+export function stripHtmlTags(text: string): string {
+  if (!isHtmlString(text)) return text;
+  // Replace standard block elements with newlines to keep text readable
+  let processed = text.replace(/<(div|p|br|h1|h2|h3|li|tr|p)[^>]*>/gi, '\n');
+  // Strip all other HTML tags
+  processed = processed.replace(/<\/?[^>]+(>|$)/g, '');
+  // Clean up excess newlines/whitespace
+  return processed
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .join('\n');
+}
+
 export function cleanHtmlString(text: string): string {
   let cleaned = text.trim();
   // Strip code block backticks if present

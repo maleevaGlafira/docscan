@@ -18,10 +18,42 @@
           "enum": ["Написано", "Отсканировано", "Исправлено", "Отослано", "Выполнено"],
           "description": "Current status of the document"
         },
+        "statusHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["Написано", "Отсканировано", "Исправлено", "Отослано", "Выполнено"]
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["status", "updatedAt"]
+          },
+          "description": "History of status changes"
+        },
         "statusUpdatedAt": {
           "type": "string",
           "format": "date-time",
           "description": "Timestamp when the status was last changed"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Optional name of the scanned file"
+        },
+        "fileModifiedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Date when the original file was last modified"
+        },
+        "scannedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of scanning"
         },
         "createdAt": {
           "type": "string",

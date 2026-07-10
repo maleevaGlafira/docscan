@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Download, ArrowLeft, RefreshCw, CloudUpload, CheckCircle, Database, Loader2, X, ChevronRight, History, Eye, Code, Info } from 'lucide-react';
+import { Copy, Download, ArrowLeft, RefreshCw, CloudUpload, CheckCircle, Database, Loader2, X, ChevronRight, History, Eye, Code, Info, Search, SlidersHorizontal, ArrowUpDown, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
-import { postProcessText, isHtmlString } from '@/utils/postProcess';
+import { postProcessText, isHtmlString, stripHtmlTags } from '@/utils/postProcess';
 import { saveDocument, subscribeToSavedDocuments, SavedDocument, updateDocument, deleteDocument } from '@/services/firebase';
 import { getPdfPreview } from '@/services/ocr';
 
@@ -11,6 +11,7 @@ interface ResultScreenProps {
   onRecognizeNewFiles: (newFiles: File[]) => void;
   initialFileModifiedAt?: Date | null;
   initialScannedAt?: Date | null;
+  initialFileName?: string | null;
 }
 
 const MAX_FILES = 3;
@@ -37,7 +38,8 @@ export function ResultScreen({
   initialText, 
   onRecognizeNewFiles,
   initialFileModifiedAt = null,
-  initialScannedAt = null
+  initialScannedAt = null,
+  initialFileName = null
 }: ResultScreenProps) {
   const [text, setText] = useState(() => postProcessText(initialText));
   const [viewMode, setViewMode] = useState<'preview' | 'edit'>('preview');
@@ -51,10 +53,80 @@ export function ResultScreen({
   
   const [fileModifiedAt, setFileModifiedAt] = useState<Date | null>(initialFileModifiedAt);
   const [scannedAt, setScannedAt] = useState<Date | null>(initialScannedAt);
+  const [fileName, setFileName] = useState<string | null>(initialFileName);
+  const [duplicateConfirmFiles, setDuplicateConfirmFiles] = useState<File[] | null>(null);
   
   const [historyDocs, setHistoryDocs] = useState<SavedDocument[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showActiveStatusHistory, setShowActiveStatusHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
+
+  // States for search and filtering history documents
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historySortBy, setHistorySortBy] = useState<'created_desc' | 'created_asc' | 'modified_desc' | 'modified_asc' | 'name_asc' | 'name_desc'>('created_desc');
+  const [historyFilterUploadDate, setHistoryFilterUploadDate] = useState('');
+  const [historyFilterModDate, setHistoryFilterModDate] = useState('');
+  const [showDetailedFilters, setShowDetailedFilters] = useState(false);
+
+  // Filter and sort saved documents based on search queries and selected dates
+  const filteredAndSortedDocs = historyDocs
+    .filter((docItem) => {
+      // 1. Search Query: matches ID, filename or content text
+      if (historySearchQuery.trim()) {
+        const query = historySearchQuery.toLowerCase();
+        const matchesName = docItem.fileName ? docItem.fileName.toLowerCase().includes(query) : false;
+        const matchesText = docItem.text ? docItem.text.toLowerCase().includes(query) : false;
+        const matchesId = docItem.id.toLowerCase().includes(query);
+        if (!matchesName && !matchesText && !matchesId) {
+          return false;
+        }
+      }
+
+      // 2. Upload Date (createdAt)
+      if (historyFilterUploadDate) {
+        const filterDateStr = new Date(historyFilterUploadDate).toDateString();
+        const createdDateStr = new Date(docItem.createdAt).toDateString();
+        if (createdDateStr !== filterDateStr) {
+          return false;
+        }
+      }
+
+      // 3. Modification Date (statusUpdatedAt or fileModifiedAt)
+      if (historyFilterModDate) {
+        const filterDateStr = new Date(historyFilterModDate).toDateString();
+        const statusUpdatedStr = new Date(docItem.statusUpdatedAt).toDateString();
+        const fileModifiedStr = docItem.fileModifiedAt ? new Date(docItem.fileModifiedAt).toDateString() : '';
+        if (statusUpdatedStr !== filterDateStr && fileModifiedStr !== filterDateStr) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      switch (historySortBy) {
+        case 'created_asc':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'created_desc':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'modified_asc':
+          return new Date(a.statusUpdatedAt).getTime() - new Date(b.statusUpdatedAt).getTime();
+        case 'modified_desc':
+          return new Date(b.statusUpdatedAt).getTime() - new Date(a.statusUpdatedAt).getTime();
+        case 'name_asc': {
+          const nameA = a.fileName || a.id || '';
+          const nameB = b.fileName || b.id || '';
+          return nameA.localeCompare(nameB);
+        }
+        case 'name_desc': {
+          const nameA = a.fileName || a.id || '';
+          const nameB = b.fileName || b.id || '';
+          return nameB.localeCompare(nameA);
+        }
+        default:
+          return 0;
+      }
+    });
 
   // New states for the load file feature on result screen
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -221,12 +293,13 @@ ${templateBody}
     setCurrentStatus(processed.trim() ? 'Отсканировано' : 'Написано');
     setFileModifiedAt(initialFileModifiedAt);
     setScannedAt(initialScannedAt);
+    setFileName(initialFileName);
     if (isHtmlString(processed)) {
       setViewMode('preview');
     } else {
       setViewMode('edit');
     }
-  }, [initialText, initialFileModifiedAt, initialScannedAt]);
+  }, [initialText, initialFileModifiedAt, initialScannedAt, initialFileName]);
 
   // Automatic status transitions based on user typing edits
   useEffect(() => {
@@ -294,6 +367,45 @@ ${templateBody}
     toast.success('Download started');
   };
 
+  const handleStartRecognition = () => {
+    if (newFiles.length === 0) return;
+
+    const duplicates = newFiles.filter(file => {
+      return historyDocs.some(docItem => {
+        if (!docItem.fileName) return false;
+        
+        const nameMatch = docItem.fileName.toLowerCase().includes(file.name.toLowerCase()) || 
+                          file.name.toLowerCase().includes(docItem.fileName.toLowerCase());
+        
+        if (!nameMatch) return false;
+
+        if (!docItem.fileModifiedAt) return false;
+
+        const fileModTime = file.lastModified;
+        const docModTime = new Date(docItem.fileModifiedAt).getTime();
+
+        const isCloseTime = Math.abs(fileModTime - docModTime) < 60000;
+        return isCloseTime;
+      });
+    });
+
+    if (duplicates.length > 0) {
+      setDuplicateConfirmFiles(duplicates);
+    } else {
+      onRecognizeNewFiles(newFiles);
+    }
+  };
+
+  const handleConfirmDuplicateScan = () => {
+    const filesToScan = [...newFiles];
+    setDuplicateConfirmFiles(null);
+    onRecognizeNewFiles(filesToScan);
+  };
+
+  const handleCancelDuplicateScan = () => {
+    setDuplicateConfirmFiles(null);
+  };
+
   const handleSaveToFirebase = async () => {
     if (!text.trim()) {
       toast.error('Нельзя сохранить пустой документ');
@@ -307,7 +419,8 @@ ${templateBody}
           text,
           status: currentStatus,
           fileModifiedAt,
-          scannedAt
+          scannedAt,
+          fileName
         });
         if (success) {
           setSaveInfo({ id: loadedDocId, savedToCloud: true, timestamp: new Date() });
@@ -317,7 +430,7 @@ ${templateBody}
         }
       } else {
         // Save new document
-        const result = await saveDocument(text, currentStatus, fileModifiedAt, scannedAt);
+        const result = await saveDocument(text, currentStatus, fileModifiedAt, scannedAt, fileName);
         setSaveInfo(result);
         setLoadedDocId(result.id);
         if (result.savedToCloud) {
@@ -421,7 +534,7 @@ ${templateBody}
                 
                 <div className="pt-6 border-t border-[#7B52FF]/10 mt-6 shrink-0 flex flex-col gap-3 max-w-2xl mx-auto w-full">
                   <button 
-                    onClick={() => onRecognizeNewFiles(newFiles)}
+                    onClick={handleStartRecognition}
                     className="w-full py-4 bg-gradient-to-r from-[#7B52FF] to-[#926CFF] hover:from-[#6A3DFF] hover:to-[#8356FF] text-white rounded-xl font-sans font-black text-sm tracking-widest uppercase shadow-xl shadow-[#7B52FF]/15 flex items-center justify-center gap-2 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] cursor-pointer border-none"
                   >
                     <span>Start Text Recognition</span>
@@ -701,13 +814,96 @@ ${templateBody}
                       <option value="Отослано" className="bg-[#140C2D] text-pink-300">📤 Отослано</option>
                       <option value="Выполнено" className="bg-[#140C2D] text-emerald-300">✅ Выполнено</option>
                     </select>
+
+                    {loadedDocId && (
+                      <button
+                        onClick={() => setShowActiveStatusHistory(!showActiveStatusHistory)}
+                        className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                          showActiveStatusHistory 
+                            ? 'bg-[#7B52FF]/20 border-[#7B52FF]/40 text-white shadow-md shadow-[#7B52FF]/10' 
+                            : 'bg-[#130B2B]/40 border-[#7B52FF]/10 text-[#B5AED7]/60 hover:text-white hover:bg-[#7B52FF]/10'
+                        }`}
+                        title="История изменения статусов"
+                      >
+                        <History className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
+                {/* Status Change History Timeline Panel */}
+                {loadedDocId && showActiveStatusHistory && (
+                  <div className="bg-[#1A1237]/60 p-4 rounded-xl border border-[#7B52FF]/20 text-xs text-[#B5AED7] shrink-0 animate-in slide-in-from-top-4 duration-200 space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#7B52FF]/10 pb-2">
+                      <div className="flex items-center gap-2">
+                        <History className="h-4 w-4 text-[#7B52FF]" />
+                        <span className="font-sans font-black text-xs uppercase tracking-wider text-white">
+                          История изменения статусов
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-[#B5AED7]/40 font-mono">
+                        ID Документа: {loadedDocId}
+                      </span>
+                    </div>
+
+                    {(() => {
+                      const activeDoc = historyDocs.find(d => d.id === loadedDocId);
+                      const historyList = activeDoc?.statusHistory || [];
+                      
+                      if (historyList.length === 0) {
+                        return (
+                          <div className="text-center py-2 text-[#B5AED7]/40 italic">
+                            Нет записей в истории изменений для этого документа.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="relative pl-4 border-l border-[#7B52FF]/20 ml-2 space-y-4 py-1">
+                          {historyList.map((entry, index) => {
+                            const dateObj = new Date(entry.updatedAt);
+                            const statusStyles = getStatusStyles(entry.status);
+                            return (
+                              <div key={index} className="relative">
+                                {/* Timeline Dot */}
+                                <div className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 bg-[#130B2B] ${statusStyles.bg.replace('/10', '/100').replace('border-', 'border-')}`} />
+                                
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-[11px] font-sans font-bold px-2 py-0.5 rounded ${statusStyles.bg} ${statusStyles.text} border border-[#7B52FF]/10`}>
+                                      {statusStyles.label}
+                                    </span>
+                                    {index === historyList.length - 1 && (
+                                      <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.2 rounded border border-emerald-500/20 font-sans uppercase font-bold tracking-wider">
+                                        Текущий
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-[#B5AED7]/50 font-mono">
+                                    {dateObj.toLocaleDateString()} {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 {/* File Metadata Bar */}
-                {(fileModifiedAt || scannedAt) && (
+                {(fileModifiedAt || scannedAt || fileName) && (
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-[#1A1237]/40 px-4 py-2.5 rounded-xl border border-[#7B52FF]/10 text-xs text-[#B5AED7]/80 gap-3">
                     <div className="flex flex-wrap items-center gap-4">
+                      {fileName && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-amber-400 font-sans font-bold uppercase text-[9px] tracking-wider">Файл:</span>
+                          <span className="font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/15 text-white max-w-[180px] truncate" title={fileName}>
+                            {fileName}
+                          </span>
+                        </div>
+                      )}
                       {fileModifiedAt && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-[#A689FF] font-sans font-bold uppercase text-[9px] tracking-wider">Дата изменения:</span>
@@ -770,6 +966,113 @@ ${templateBody}
                 </button>
               </div>
 
+              {/* Search & Filtering Panel (Pinned at the top of history list) */}
+              {!loadingHistory && historyDocs.length > 0 && (
+                <div className="p-3 border-b border-[#7B52FF]/15 bg-[#170E33]/80 space-y-2">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#B5AED7]/40" />
+                    <input
+                      type="text"
+                      value={historySearchQuery}
+                      onChange={(e) => setHistorySearchQuery(e.target.value)}
+                      placeholder="Поиск по имени, тексту, ID..."
+                      className="w-full bg-[#0A051A]/60 border border-[#7B52FF]/20 rounded-md py-1.5 pl-8 pr-7 text-xs text-white placeholder-[#B5AED7]/40 focus:border-[#7B52FF]/50 focus:outline-none transition-colors font-sans"
+                    />
+                    {historySearchQuery && (
+                      <button
+                        onClick={() => setHistorySearchQuery('')}
+                        className="absolute right-2 top-2 p-0.5 rounded hover:bg-white/10 text-[#B5AED7]/60 hover:text-white transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sort Selection & Filters toggle */}
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <div className="flex items-center gap-1.5 flex-1 max-w-[65%]">
+                      <ArrowUpDown className="h-3 w-3 text-[#A689FF]/70 shrink-0" />
+                      <select
+                        value={historySortBy}
+                        onChange={(e: any) => setHistorySortBy(e.target.value)}
+                        className="bg-[#0A051A]/60 border border-[#7B52FF]/20 rounded py-0.5 px-1 text-[10px] text-[#B5AED7] focus:outline-none focus:border-[#7B52FF]/50 transition-colors font-sans w-full cursor-pointer"
+                      >
+                        <option value="created_desc">⏱️ Сначала новые (загрузка)</option>
+                        <option value="created_asc">⏱️ Сначала старые (загрузка)</option>
+                        <option value="modified_desc">✏️ Сначала новые (изменено)</option>
+                        <option value="modified_asc">✏️ Сначала старые (изменено)</option>
+                        <option value="name_asc">🗂️ По имени (А-Я)</option>
+                        <option value="name_desc">🗂️ По имени (Я-А)</option>
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => setShowDetailedFilters(!showDetailedFilters)}
+                      className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-sans transition-all cursor-pointer ${
+                        showDetailedFilters || historyFilterUploadDate || historyFilterModDate
+                          ? 'bg-[#7B52FF]/20 border-[#7B52FF]/40 text-white shadow-sm shadow-[#7B52FF]/10'
+                          : 'bg-[#0A051A]/40 border-[#7B52FF]/10 text-[#B5AED7]/60 hover:text-white hover:bg-[#7B52FF]/10'
+                      }`}
+                    >
+                      <SlidersHorizontal className="h-2.5 w-2.5" />
+                      <span>Даты</span>
+                      {(historyFilterUploadDate || historyFilterModDate) && (
+                        <span className="h-1 w-1 rounded-full bg-pink-500 animate-pulse ml-0.5" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Date Filters Panel */}
+                  {showDetailedFilters && (
+                    <div className="bg-[#100824]/90 p-3 rounded-lg border border-[#7B52FF]/30 space-y-2.5 animate-in slide-in-from-top-2 duration-150 shadow-lg">
+                      <div className="flex items-center justify-between border-b border-[#7B52FF]/15 pb-1.5">
+                        <span className="text-[10px] text-[#A689FF] font-black uppercase tracking-wider">Фильтры по датам</span>
+                        {(historyFilterUploadDate || historyFilterModDate) && (
+                          <button
+                            onClick={() => {
+                              setHistoryFilterUploadDate('');
+                              setHistoryFilterModDate('');
+                            }}
+                            className="text-[10px] text-pink-400 hover:text-pink-300 transition-colors font-semibold cursor-pointer"
+                          >
+                            Сбросить
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[#B5AED7]/80 font-sans font-medium flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-emerald-400" />
+                            Загрузка:
+                          </label>
+                          <input
+                            type="date"
+                            value={historyFilterUploadDate}
+                            onChange={(e) => setHistoryFilterUploadDate(e.target.value)}
+                            className="w-full bg-[#0A051A]/80 border border-[#7B52FF]/30 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#7B52FF]/60 cursor-pointer transition-colors"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[#B5AED7]/80 font-sans font-medium flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-pink-400" />
+                            Изменение:
+                          </label>
+                          <input
+                            type="date"
+                            value={historyFilterModDate}
+                            onChange={(e) => setHistoryFilterModDate(e.target.value)}
+                            className="w-full bg-[#0A051A]/80 border border-[#7B52FF]/30 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#7B52FF]/60 cursor-pointer transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex-1 overflow-y-auto p-3.5 space-y-3 custom-scrollbar">
                 {loadingHistory ? (
                   <div className="text-center py-12 text-[#B5AED7]/50 text-xs flex flex-col items-center justify-center gap-2">
@@ -782,8 +1085,14 @@ ${templateBody}
                     <span>No documents saved yet.</span>
                     <span className="text-[10px] text-[#B5AED7]/30 mt-1">Press "Save Document" to persist scanning results.</span>
                   </div>
+                ) : filteredAndSortedDocs.length === 0 ? (
+                  <div className="text-center py-12 text-[#B5AED7]/40 text-xs px-4 flex flex-col items-center gap-2">
+                    <SlidersHorizontal className="h-8 w-8 text-[#7B52FF]/30 stroke-[1.5]" />
+                    <span>Документы не найдены</span>
+                    <span className="text-[10px] text-[#B5AED7]/30 mt-1">Попробуйте изменить поисковый запрос или фильтры по дате.</span>
+                  </div>
                 ) : (
-                  historyDocs.map((docItem) => (
+                  filteredAndSortedDocs.map((docItem) => (
                     <div 
                       key={docItem.id}
                       onClick={() => {
@@ -794,6 +1103,7 @@ ${templateBody}
                         setSaveInfo({ id: docItem.id, savedToCloud: docItem.savedToCloud, timestamp: docItem.statusUpdatedAt });
                         setFileModifiedAt(docItem.fileModifiedAt || null);
                         setScannedAt(docItem.scannedAt || null);
+                        setFileName(docItem.fileName || null);
                         if (isHtmlString(docItem.text)) {
                           setViewMode('preview');
                         } else {
@@ -842,7 +1152,7 @@ ${templateBody}
                       </div>
 
                       <p className="text-xs text-white/95 line-clamp-3 font-sans leading-relaxed break-keep">
-                        {docItem.text}
+                        {stripHtmlTags(docItem.text)}
                       </p>
 
                       <div className="flex flex-col gap-1.5 pt-1.5 border-t border-[#7B52FF]/5">
@@ -850,6 +1160,9 @@ ${templateBody}
                           <div className="flex flex-col gap-0.5">
                             <span>Создан: {docItem.createdAt.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
                             <span>Изменен: {docItem.statusUpdatedAt.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            {docItem.fileName && (
+                              <span className="text-amber-400 truncate max-w-[220px]" title={docItem.fileName}>Файл: {docItem.fileName}</span>
+                            )}
                             {docItem.fileModifiedAt && (
                               <span className="text-[#A689FF]">Файл изменен: {new Date(docItem.fileModifiedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
                             )}
@@ -887,6 +1200,26 @@ ${templateBody}
                           </select>
                         </div>
                       </div>
+
+                      {/* Mini Status History */}
+                      {docItem.statusHistory && docItem.statusHistory.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-[#7B52FF]/10 space-y-1">
+                          <span className="text-[9px] text-[#A689FF]/60 font-sans font-bold uppercase tracking-wider">
+                            История изменений:
+                          </span>
+                          <div className="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">
+                            {docItem.statusHistory.map((h, hIdx) => {
+                              const hDate = new Date(h.updatedAt);
+                              return (
+                                <div key={hIdx} className="flex justify-between items-center text-[9px] text-[#B5AED7]/60 font-mono">
+                                  <span className="font-semibold text-[#B5AED7]/80">▸ {getStatusStyles(h.status).label.replace(/✍️ |🔍 |✏️ |📤 |✅ /, '')}</span>
+                                  <span>{hDate.toLocaleDateString([], { dateStyle: 'short' })} {hDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -910,6 +1243,7 @@ ${templateBody}
                   setSaveInfo(null);
                   setFileModifiedAt(null);
                   setScannedAt(null);
+                  setFileName(null);
                   setManualText('');
                   setTemplateTo('');
                   setTemplateFrom('');
@@ -1067,6 +1401,43 @@ ${templateBody}
           >
             <X className="h-6 w-6" />
           </button>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Duplicates */}
+      {duplicateConfirmFiles && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#130B2B] border border-[#7B52FF]/30 rounded-2xl p-6 max-w-md w-full shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#7B52FF] to-transparent" />
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 text-amber-400">
+                <Info className="h-6 w-6 stroke-[2]" />
+                <h3 className="font-sans font-black text-sm text-white uppercase tracking-wider">
+                  Повторное сканирование?
+                </h3>
+              </div>
+              <p className="text-xs text-[#B5AED7]/80 leading-relaxed font-sans">
+                Файл(ы) с именем <span className="text-amber-300 font-bold">"{duplicateConfirmFiles.map(f => f.name).join(', ')}"</span> и аналогичной датой изменения уже были отсканированы и сохранены в базе.
+              </p>
+              <p className="text-[11px] text-[#B5AED7]/50 font-sans italic leading-normal">
+                Вы уверены, что хотите отсканировать этот файл еще раз?
+              </p>
+              <div className="pt-4 flex gap-3 justify-end">
+                <button
+                  onClick={handleCancelDuplicateScan}
+                  className="px-4 py-2 border border-[#7B52FF]/20 hover:border-[#7B52FF]/40 text-[#B5AED7] hover:text-white rounded-xl font-sans font-bold text-xs transition-all cursor-pointer bg-transparent"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleConfirmDuplicateScan}
+                  className="px-4 py-2 bg-gradient-to-r from-[#7B52FF] to-[#926CFF] hover:from-[#6A3DFF] hover:to-[#8356FF] text-white rounded-xl font-sans font-black text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer border-none"
+                >
+                  Сканировать заново
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
