@@ -8,7 +8,7 @@ dotenv.config();
 
 // Helper function to call Gemini API with robust retries and model fallbacks
 async function generateContentWithRetry(ai: GoogleGenAI, params: any, maxRetries = 3) {
-  const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.5-pro", "gemini-1.5-pro", "gemini-3.5-flash"];
+  const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite"];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -55,16 +55,6 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  // Initialize Gemini API
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
-
   // API route for OCR using Gemini
   app.post("/api/recognize", async (req, res) => {
     try {
@@ -74,9 +64,28 @@ async function startServer() {
         return res.status(400).json({ error: "No images provided" });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
+      let apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
          return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server." });
       }
+
+      // Clean the API key from accidental surrounding quotes or whitespace
+      apiKey = apiKey.trim().replace(/^["']|["']$/g, "").trim();
+     
+
+      if (!apiKey) {
+         return res.status(500).json({ error: "GEMINI_API_KEY is configured but appears to be empty." });
+      }
+
+      // Initialize Gemini API dynamically to ensure up-to-date environment key is used
+      const ai = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build",
+          },
+        },
+      });
 
       const parts = images.map((dataUrl: string) => {
         // Handle images that start with "data:image/x;base64,"

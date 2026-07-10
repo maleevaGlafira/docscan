@@ -51,6 +51,8 @@ export function ResultScreen({
   const [baselineText, setBaselineText] = useState(() => postProcessText(initialText));
   const [currentStatus, setCurrentStatus] = useState<'Написано' | 'Отсканировано' | 'Исправлено' | 'Отослано' | 'Выполнено'>('Отсканировано');
   
+  const isProgrammaticChange = useRef(true);
+  
   const [fileModifiedAt, setFileModifiedAt] = useState<Date | null>(initialFileModifiedAt);
   const [scannedAt, setScannedAt] = useState<Date | null>(initialScannedAt);
   const [fileName, setFileName] = useState<string | null>(initialFileName);
@@ -191,6 +193,7 @@ ${templateBody}
       `.trim();
     }
     
+    isProgrammaticChange.current = true;
     setText(finalContent);
     setBaselineText(finalContent);
     setLoadedDocId(null);
@@ -286,6 +289,7 @@ ${templateBody}
 
   useEffect(() => {
     const processed = postProcessText(initialText);
+    isProgrammaticChange.current = true;
     setText(processed);
     setBaselineText(processed);
     setLoadedDocId(null);
@@ -303,6 +307,10 @@ ${templateBody}
 
   // Automatic status transitions based on user typing edits
   useEffect(() => {
+    if (isProgrammaticChange.current) {
+      return;
+    }
+
     const trimmed = text.trim();
     if (trimmed === '') {
       if (currentStatus !== 'Написано') {
@@ -940,7 +948,10 @@ ${templateBody}
                     <textarea
                       className="w-full h-full bg-[#0A051A]/60 border border-[#7B52FF]/10 rounded-xl p-5 sm:p-7 text-white whitespace-pre-wrap overflow-y-auto resize-none outline-none focus:border-[#7B52FF]/40 focus:ring-1 focus:ring-[#7B52FF]/20 transition-all font-sans leading-relaxed text-[15px] shadow-inner custom-scrollbar"
                       value={text}
-                      onChange={(e) => setText(e.target.value)}
+                      onChange={(e) => {
+                        isProgrammaticChange.current = false;
+                        setText(e.target.value);
+                      }}
                       placeholder="No text recognized..."
                       style={{ fontFamily: 'Plus Jakarta Sans', letterSpacing: '0.01em' }}
                     />
@@ -1096,6 +1107,7 @@ ${templateBody}
                     <div 
                       key={docItem.id}
                       onClick={() => {
+                        isProgrammaticChange.current = true;
                         setText(docItem.text);
                         setBaselineText(docItem.text);
                         setLoadedDocId(docItem.id);
@@ -1134,6 +1146,7 @@ ${templateBody}
                               if (success) {
                                 toast.success('Документ удален');
                                 if (loadedDocId === docItem.id) {
+                                  isProgrammaticChange.current = true;
                                   setText('');
                                   setBaselineText('');
                                   setLoadedDocId(null);
